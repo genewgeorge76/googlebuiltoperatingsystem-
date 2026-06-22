@@ -488,25 +488,28 @@ function ProposalStation(){
   const generate=async()=>{
     setLoading(true);
     const price=estimatePrice(f.service,f.prop,parseFloat(f.sqft)||0,f.state);
-    const prompt=`Generate a professional project proposal for:
-Client: ${f.client||'Property Owner'}
-Address: ${f.address||'TBD'}
-Service: ${SVC_LABELS[f.service]}
-Property Type: ${f.prop}
-Size: ${f.sqft} sq ft
-State: ${STATE_MAP[f.state]?.name||f.state}
-Price Range: ${price?`${fmt$(price.low)} - ${fmt$(price.high)}`:'TBD'}
-Notes: ${f.notes||'None'}
-
-Include: Executive Summary, Scope of Work, Materials & Specifications, Timeline, Investment Summary, Terms & Conditions, Company Credentials (VA Class A, A+ BBB since 1994, 40+ years). Sign as J. Worden & Sons Asphalt Paving, Chester VA 23836, (804) 446-1296.`;
-    try{
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
-          system:'You are a senior estimator at J. Worden & Sons, VA Class A General Contractor. Write polished, client-ready proposals. Be specific and professional.',
-          messages:[{role:'user',content:prompt}]})});
-      const data=await resp.json();
-      setProposal(data.content?.map(b=>b.text||'').join('\n')||'Could not generate proposal.');
-    }catch(e){setProposal(`Error: ${e.message}`);}
+    
+    try {
+      const resp = await fetch('/api/bidder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client: f.client,
+          address: f.address,
+          service: SVC_LABELS[f.service],
+          sqft: f.sqft,
+          region: f.state,
+          soilType: 'Standard'
+        })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      
+      const metricsText = `\n\n--- ENGINEERING METRICS ---\nAsphalt Required: ${data.metrics.asphaltTons.toFixed(2)} Tons\nStone Base Required: ${data.metrics.stoneTons.toFixed(2)} Tons\nEstimated Material Cost: $${data.metrics.totalProjectedCost.toFixed(2)}`;
+      setProposal(data.estimate + metricsText);
+    } catch(e) {
+      setProposal(`Error: ${e.message}`);
+    }
     setLoading(false);
   };
   return(<div>
