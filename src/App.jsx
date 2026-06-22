@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
+import { weatherEngine } from "./lib/weatherEngine.js";
+import { pciDecayEngine } from "./lib/pciDecay.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE WORDEN COMMAND SYSTEM — Every Ferrari, One Garage
@@ -577,6 +579,66 @@ function DispatchStation(){
 }
 
 // ── MAIN APP ────────────────────────────────────────────────────────────────
+// ── COMMERCIAL REAL ESTATE HUB ──────────────────────────────────────────────
+function RealEstateStation() {
+  const [alerts, setAlerts] = useState([]);
+  const [f, setF] = useState({ months: 36, sqft: 50000, region: 'VA' });
+  const [report, setReport] = useState(null);
+
+  useEffect(() => {
+    weatherEngine.fetchWeatherAlerts().then(setAlerts);
+  }, []);
+
+  useEffect(() => {
+    setReport(pciDecayEngine.generateHealthReport(f.months, f.sqft, f.region));
+  }, [f.months, f.sqft, f.region]);
+
+  const upd = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  return (
+    <div>
+      <div style={sty.grid2}>
+        <div style={sty.card}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.amber, marginBottom: 16 }}>WEATHER INTELLIGENCE (OPEN-METEO)</div>
+          {alerts.length === 0 ? (
+            <div style={{ color: COLORS.green, fontSize: 13, fontWeight: 700 }}>LOADING OR ALL HUBS CLEAR...</div>
+          ) : (
+            alerts.map((a, i) => (
+              <div key={i} style={{ padding: 12, background: COLORS.red + '22', borderLeft: `4px solid ${COLORS.red}`, marginBottom: 8, fontSize: 13, color: '#ffcccc' }}>
+                {a}
+              </div>
+            ))
+          )}
+        </div>
+
+        <div style={sty.card}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.blue, marginBottom: 16 }}>ASSET AGE DECAY (PCI)</div>
+          <div style={sty.grid3}>
+            <div><label style={sty.label}>Age (Months)</label><input style={sty.input} type="number" value={f.months} onChange={e => upd('months', parseInt(e.target.value) || 0)} /></div>
+            <div><label style={sty.label}>Square Feet</label><input style={sty.input} type="number" value={f.sqft} onChange={e => upd('sqft', parseInt(e.target.value) || 0)} /></div>
+            <div><label style={sty.label}>Region/State</label><input style={sty.input} value={f.region} onChange={e => upd('region', e.target.value)} /></div>
+          </div>
+        </div>
+      </div>
+
+      {report && (
+        <div style={sty.card}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.green, marginBottom: 16 }}>JWORDENAI™ ASSET HEALTH REPORT</div>
+          <div style={sty.grid4}>
+            <div><div style={sty.label}>Current PCI Score</div><div style={sty.bigNum(report.pciScore < 50 ? COLORS.red : COLORS.green)}>{report.pciScore}</div></div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <div style={sty.label}>Required Action</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.white, marginTop: 4 }}>{report.action}</div>
+              <div style={{ fontSize: 12, color: COLORS.gray, marginTop: 4 }}>{report.maintenanceAlert}</div>
+            </div>
+            <div><div style={sty.label}>Est. Repair Value</div><div style={sty.bigNum(COLORS.amber)}>${report.estimatedRepairValue.toLocaleString()}</div></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const STATIONS=[
   {id:'jarvis',label:'JARVIS',icon:'🤖'},
   {id:'bid',label:'BID COMMAND',icon:'📋'},
@@ -586,6 +648,7 @@ const STATIONS=[
   {id:'legal',label:'LEGAL ADVISOR',icon:'⚖️'},
   {id:'proposal',label:'PROPOSALS',icon:'📄'},
   {id:'dispatch',label:'DISPATCH',icon:'🚛'},
+  {id:'realestate',label:'REAL ESTATE HUB',icon:'🏢'},
 ];
 
 export default function WordenCommandSystem(){
@@ -613,6 +676,7 @@ export default function WordenCommandSystem(){
       {tab==='legal'&&<LegalStation/>}
       {tab==='proposal'&&<ProposalStation/>}
       {tab==='dispatch'&&<DispatchStation/>}
+      {tab==='realestate'&&<RealEstateStation/>}
     </div>
   </div>);
 }
