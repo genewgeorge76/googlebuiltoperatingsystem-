@@ -33,12 +33,12 @@ export default async function handler(req, res) {
   const stoneTons = (parseFloat(sqft) * (stoneBaseDepth / 12) * 150) / 2000; // 150lb/cuft for stone
   const totalProjectedCost = (asphaltTons * ASPHALT_COST_PER_TON) + (stoneTons * STONE_BASE_COST_PER_TON);
 
-  // 3. The Claude Intelligent Proposal Engine
+  // 3. The Claude Intelligent Contract Writer
   try {
     if (!process.env.CLAUDE_API_KEY) {
       console.warn("CLAUDE_API_KEY is not set. Running in simulation mode.");
       return res.status(200).json({
-        estimate: `[SIMULATION MODE - NO API KEY]\n\nProposal for ${client || 'Client'} at ${address || 'TBD'}\nService: ${service || 'Paving'}\nMetrics:\nAsphalt: ${asphaltTons.toFixed(2)} Tons (${depthSpec}" depth)\nStone: ${stoneTons.toFixed(2)} Tons (${stoneBaseDepth}" depth)\nEstimated Material Cost: $${totalProjectedCost.toFixed(2)}`,
+        estimate: `[SIMULATION MODE - NO API KEY]\n\nFORMAL CONTRACT for ${client || 'Client'} at ${address || 'TBD'}\nService: ${service || 'Paving'}\n\nTerms: Net 30.\nSpecs:\nAsphalt: ${asphaltTons.toFixed(2)} Tons (${depthSpec}" depth)\nStone: ${stoneTons.toFixed(2)} Tons (${stoneBaseDepth}" depth)\nCost: $${totalProjectedCost.toFixed(2)}`,
         metrics: { asphaltTons, stoneTons, totalProjectedCost }
       });
     }
@@ -46,11 +46,19 @@ export default async function handler(req, res) {
     const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
     const response = await anthropic.messages.create({
       model: "claude-3-7-sonnet-latest",
-      max_tokens: 1000,
-      system: "You are the J. Worden Paving Estimator. Write in a professional, 4th-generation contractor tone.",
+      max_tokens: 1500,
+      system: `You are the Lead Contract Administrator for J. Worden & Sons Asphalt Paving. You must output a formal, legally-binding construction contract.
+      
+Format your output cleanly in Markdown. Do not include casual conversational text. Use this exact structure:
+1. CONTRACT HEADER (Parties, Date, Property Address)
+2. SCOPE OF WORK (Detailed engineering specs)
+3. MATERIAL YIELDS & ENGINEERING (Exact tonnages)
+4. COMPLIANCE CLAUSES (State-specific laws, OSHA)
+5. J. WORDEN STANDARD TERMS & CONDITIONS (Warranty, Payment Net 30, Force Majeure)
+6. SIGNATURE BLOCK`,
       messages: [{
         role: "user",
-        content: `Create a bid proposal for ${client || 'Client'} at ${address || 'TBD'}. Service requested: ${service || 'Asphalt Paving'}. Specs: ${sqft} sqft, ${depthSpec}" Asphalt, ${stoneBaseDepth}" Stone Base. Calculated material yields: ${asphaltTons.toFixed(1)} tons of asphalt, ${stoneTons.toFixed(1)} tons of stone. Include an Executive Summary, Scope of Work, Timeline, and Terms. Mention why our engineering in ${region || 'this region'} prevents failure.`
+        content: `Draft a binding contract for ${client || 'Client'} at ${address || 'TBD'}. Service: ${service || 'Asphalt Paving'}. Specs: ${sqft} sqft, ${depthSpec}" Asphalt, ${stoneBaseDepth}" Stone Base. Calculated material yields: ${asphaltTons.toFixed(1)} tons of asphalt, ${stoneTons.toFixed(1)} tons of stone. Make sure to embed strict ${region || 'Virginia'} state compliance rules.`
       }]
     });
 

@@ -2,6 +2,58 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, Cell } from "recharts";
 import { weatherEngine } from "./lib/weatherEngine.js";
 import { pciDecayEngine } from "./lib/pciDecay.js";
+import { MapContainer, TileLayer, Polygon, useMapEvents } from "react-leaflet";
+import * as turf from "@turf/turf";
+import "leaflet/dist/leaflet.css";
+
+function useStickyState(defaultValue, key) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stickyValue = window.localStorage.getItem(key);
+      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
+    } catch(err) {
+      return defaultValue;
+    }
+  });
+  useEffect(() => {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+  return [value, setValue];
+}
+
+function AreaMapper({ onCalculate }) {
+  const [points, setPoints] = useState([]);
+  
+  const MapEvents = () => {
+    useMapEvents({
+      click(e) {
+        const newPoints = [...points, [e.latlng.lat, e.latlng.lng]];
+        setPoints(newPoints);
+        if (newPoints.length >= 3) {
+          const coords = [...newPoints, newPoints[0]];
+          const polygon = turf.polygon([[...coords.map(p => [p[1], p[0]])]]);
+          const areaSqMeters = turf.area(polygon);
+          const areaSqFt = areaSqMeters * 10.7639;
+          onCalculate(Math.round(areaSqFt));
+        }
+      }
+    });
+    return null;
+  };
+
+  return (
+    <div style={{ height: 280, width: '100%', border: '1px solid #333', marginTop: 12, borderRadius: 6, overflow: 'hidden' }}>
+      <MapContainer center={[37.5407, -77.4360]} zoom={17} style={{ height: 'calc(100% - 35px)', width: '100%' }}>
+        <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" attribution="Tiles &copy; Esri" />
+        <MapEvents />
+        {points.length > 0 && <Polygon positions={points} color="#f59e0b" fillColor="#f59e0b" fillOpacity={0.4} />}
+      </MapContainer>
+      <div style={{ height: 35, background: '#1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#888' }}>
+        {points.length < 3 ? "Click map to draw property boundary..." : <button onClick={() => setPoints([])} style={{ background: 'transparent', border: '1px solid #f59e0b', color: '#f59e0b', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 10 }}>CLEAR MAP</button>}
+      </div>
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE WORDEN COMMAND SYSTEM — Every Ferrari, One Garage
@@ -208,7 +260,8 @@ function JarvisStation(){
 function BidStation(){
   const[f,setF]=useState({name:'',address:'',sqft:'',depth:'2',service:'paving',prop:'commercial',state:'VA',industrial:false});
   const[result,setResult]=useState(null);
-  const[bids,setBids]=useState([]);
+  const[bids,setBids]=useStickyState([], 'worden-bids');
+  const[showMap, setShowMap]=useState(false);
   const upd=(k,v)=>setF(p=>({...p,[k]:v}));
 
   const calculate=()=>{
@@ -239,9 +292,10 @@ function BidStation(){
           {Object.entries(SVC_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
         <div><label style={sty.label}>Property Type</label><select style={sty.select} value={f.prop} onChange={e=>upd('prop',e.target.value)}>
           <option value="residential">Residential</option><option value="commercial">Commercial</option></select></div>
-        <div><label style={sty.label}>Sq Ft</label><input style={sty.input} type="number" value={f.sqft} onChange={e=>upd('sqft',e.target.value)} placeholder="5000"/></div>
+        <div><label style={sty.label}>Sq Ft <span style={{color:COLORS.amber, cursor:'pointer', float:'right'}} onClick={()=>setShowMap(!showMap)}>🗺️ MAP</span></label><input style={sty.input} type="number" value={f.sqft} onChange={e=>upd('sqft',e.target.value)} placeholder="5000"/></div>
         <div><label style={sty.label}>Depth (in)</label><input style={sty.input} type="number" value={f.depth} onChange={e=>upd('depth',e.target.value)} step="0.5"/></div>
       </div>
+      {showMap && <AreaMapper onCalculate={(val) => upd('sqft', val)} />}
       <div style={{...sty.grid3,marginTop:12}}>
         <div><label style={sty.label}>State</label><select style={sty.select} value={f.state} onChange={e=>upd('state',e.target.value)}>
           {STATES.map(s=><option key={s.abbr} value={s.abbr}>{s.name} ({s.abbr})</option>)}</select></div>
@@ -545,9 +599,9 @@ function ProposalStation(){
 
 // ── DISPATCH STATION ────────────────────────────────────────────────────────
 function DispatchStation(){
-  const[trucks,setTrucks]=useState([{id:1,name:'Truck 1 — F-350',capacity:5,status:'available',lat:37.38,lng:-77.45}]);
-  const[crews,setCrews]=useState([{id:1,name:'Crew Alpha',lead:'Mike',size:4,status:'ready'}]);
-  const[jobs,setJobs]=useState([{id:1,name:'Food Lion #2118',address:'Chester VA',sqft:3000,status:'pending',priority:'high'}]);
+  const[trucks,setTrucks]=useStickyState([{id:1,name:'Truck 1 — F-350',capacity:5,status:'available',lat:37.38,lng:-77.45}], 'worden-trucks');
+  const[crews,setCrews]=useStickyState([{id:1,name:'Crew Alpha',lead:'Mike',size:4,status:'ready'}], 'worden-crews');
+  const[jobs,setJobs]=useStickyState([{id:1,name:'Food Lion #2118',address:'Chester VA',sqft:3000,status:'pending',priority:'high'}], 'worden-dispatch-jobs');
   return(<div>
     <div style={sty.grid3}>
       <div style={sty.card}>

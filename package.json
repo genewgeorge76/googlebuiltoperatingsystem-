@@ -11,9 +11,12 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.105.0",
+    "@turf/turf": "^7.3.5",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.21.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
+    "react-leaflet": "^5.0.0",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
