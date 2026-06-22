@@ -10,11 +10,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  let address, sqft, soilType, region, client, service;
+  let address, sqft, soilType, region, client, service, isDesignBuild, materials, totalCost, margin35, low, high;
   try {
-    ({ address, sqft, soilType, region, client, service } = req.body);
+    ({ address, sqft, soilType, region, client, service, isDesignBuild, materials, totalCost, margin35, low, high } = req.body);
   } catch (err) {
-    return res.status(400).json({ error: 'Invalid request data. Please provide address, sqft, soilType, and region.' });
+    return res.status(400).json({ error: 'Invalid request data. Please provide necessary fields.' });
   }
 
   // 1. Regional Logic Gate
@@ -44,22 +44,44 @@ export default async function handler(req, res) {
     }
 
     const anthropic = new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
+    let systemPrompt = "";
+    let userContent = "";
+
+    if (isDesignBuild) {
+      systemPrompt = `You are the Chief Architect and Lead Designer for J. Worden & Sons. 
+You write ultra-premium, high-end Architectural Design-Build proposals.
+Speak with extreme professionalism. Focus on the luxury of the upgrades and the structural integrity of the local baseline materials chosen for their specific State/Region. Output ONLY the raw contract text, beautifully formatted.`;
+      
+      const matList = materials.map(m => `- ${m.qty} ${m.pricePerSqft ? 'sqft' : 'units'} of ${m.name} (${m.category})`).join('\n');
+      
+      userContent = `Please draft a formal Architectural Design-Build Proposal for the property at: ${address}.
+Client: ${client}
+Total Value: $${margin35.toLocaleString(undefined, {maximumFractionDigits:0})}
+
+Selected Materials:
+${matList}
+
+Include sections for:
+1. Architectural Vision
+2. Material Selection (explain why these materials are perfect for ${address})
+3. Investment Summary`;
+    } else {
+      systemPrompt = `You are the Lead Contract Administrator for J. Worden & Sons Asphalt Paving. 
+You ONLY output legally-binding, highly formal construction contracts.
+You use exact legal terminology. No pleasantries. No markdown formatting outside of standard headers. Output the raw contract text only.`;
+
+      userContent = `Write a formal, legally binding paving contract for ${client || 'Client'} at ${address || 'TBD'}.
+Service: ${service || 'Asphalt Paving'}
+Square Footage: ${sqft} sqft
+Price Range: $${low} to $${high}
+Include sections for Scope of Work, Payment Terms, and Worden Standard Quality Guarantees.`;
+    }
+
     const response = await anthropic.messages.create({
       model: "claude-3-7-sonnet-latest",
       max_tokens: 1500,
-      system: `You are the Lead Contract Administrator for J. Worden & Sons Asphalt Paving. You must output a formal, legally-binding construction contract.
-      
-Format your output cleanly in Markdown. Do not include casual conversational text. Use this exact structure:
-1. CONTRACT HEADER (Parties, Date, Property Address)
-2. SCOPE OF WORK (Detailed engineering specs)
-3. MATERIAL YIELDS & ENGINEERING (Exact tonnages)
-4. COMPLIANCE CLAUSES (State-specific laws, OSHA)
-5. J. WORDEN STANDARD TERMS & CONDITIONS (Warranty, Payment Net 30, Force Majeure)
-6. SIGNATURE BLOCK`,
-      messages: [{
-        role: "user",
-        content: `Draft a binding contract for ${client || 'Client'} at ${address || 'TBD'}. Service: ${service || 'Asphalt Paving'}. Specs: ${sqft} sqft, ${depthSpec}" Asphalt, ${stoneBaseDepth}" Stone Base. Calculated material yields: ${asphaltTons.toFixed(1)} tons of asphalt, ${stoneTons.toFixed(1)} tons of stone. Make sure to embed strict ${region || 'Virginia'} state compliance rules.`
-      }]
+      system: systemPrompt,
+      messages: [{ role: "user", content: userContent }]
     });
 
     return res.status(200).json({

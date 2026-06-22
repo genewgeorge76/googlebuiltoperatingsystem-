@@ -5,6 +5,7 @@ import { pciDecayEngine } from "./lib/pciDecay.js";
 import { MapContainer, TileLayer, Polygon, useMapEvents } from "react-leaflet";
 import * as turf from "@turf/turf";
 import { OSProvider, useOS } from "./context/OSContext";
+import { getRegionalMaterials } from "./lib/materialEngine.js";
 import JarvisOrb from "./components/JarvisOrb";
 import "leaflet/dist/leaflet.css";
 
@@ -683,8 +684,135 @@ function RealEstateStation() {
   );
 }
 
+// ── DESIGN BUILD STATION (Phase 5) ──────────────────────────────────────────
+function DesignStation() {
+  const [geoState, setGeoState] = useState('VA');
+  const [cart, setCart] = useState([]);
+  const materials = getRegionalMaterials(geoState);
+  const { bids, addBid } = useOS();
+  const [loading, setLoading] = useState(false);
+  const [proposal, setProposal] = useState(null);
+
+  const addToCart = (item) => {
+    if(!cart.find(c => c.id === item.id)) {
+      setCart([...cart, { ...item, qty: 100 }]);
+    }
+  };
+
+  const updateQty = (id, qty) => {
+    setCart(cart.map(c => c.id === id ? { ...c, qty: parseInt(qty) || 0 } : c));
+  };
+
+  const totalCost = cart.reduce((sum, item) => sum + (item.pricePerSqft ? item.pricePerSqft * item.qty : item.pricePerItem * item.qty), 0);
+  const margin35 = totalCost / 0.65;
+
+  const generateProposal = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/bidder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client: 'Design Build Client',
+          address: geoState,
+          isDesignBuild: true,
+          materials: cart,
+          totalCost,
+          margin35
+        })
+      });
+      const data = await resp.json();
+      setProposal(data.contract);
+      addBid({ id: Date.now(), name: 'Design Build Proposal', address: geoState, total: margin35, status: 'draft' });
+    } catch(err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: 24 }}>
+      <div style={{ flex: 2 }}>
+        <div style={sty.card}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16}}>
+            <div style={sty.label}>PROJECT REGION (51 JURISDICTIONS)</div>
+            <select value={geoState} onChange={e => { setGeoState(e.target.value); setCart([]); }} style={sty.input}>
+              {STATES.map(s => <option key={s.abbr} value={s.abbr}>{s.name}</option>)}
+            </select>
+          </div>
+          
+          <div style={{fontSize: 14, color: COLORS.green, marginBottom: 8}}>■ READILY AVAILABLE LOCAL MATERIALS</div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap: 12, marginBottom: 24}}>
+            {materials.local.map(m => (
+              <div key={m.id} onClick={()=>addToCart(m)} style={{...sty.card, cursor:'pointer', padding:12, border: '1px solid #333', background: '#222'}}>
+                <div style={{fontSize: 24}}>{m.img}</div>
+                <div style={{fontSize: 13, fontWeight: 600, color: COLORS.white, marginTop: 8}}>{m.name}</div>
+                <div style={{fontSize: 11, color: COLORS.gray}}>{m.category}</div>
+                <div style={{fontSize: 12, color: COLORS.amber, marginTop: 4}}>${(m.pricePerSqft || m.pricePerItem).toFixed(2)}/{m.pricePerSqft ? 'sqft' : 'ea'}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{fontSize: 14, color: '#a855f7', marginBottom: 8}}>■ PREMIUM LUXURY UPGRADES</div>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap: 12}}>
+            {materials.premium.map(m => (
+              <div key={m.id} onClick={()=>addToCart(m)} style={{...sty.card, cursor:'pointer', padding:12, border: '1px solid #a855f744', background: '#222'}}>
+                <div style={{fontSize: 24}}>{m.img}</div>
+                <div style={{fontSize: 13, fontWeight: 600, color: COLORS.white, marginTop: 8}}>{m.name}</div>
+                <div style={{fontSize: 11, color: COLORS.gray}}>{m.category}</div>
+                <div style={{fontSize: 12, color: COLORS.amber, marginTop: 4}}>${(m.pricePerSqft || m.pricePerItem).toFixed(2)}/{m.pricePerSqft ? 'sqft' : 'ea'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1 }}>
+        <div style={sty.card}>
+          <div style={sty.label}>DESIGN CART</div>
+          {cart.length === 0 ? <div style={{color:COLORS.gray, fontSize:13, marginTop:12}}>Select materials from the catalog...</div> : (
+            <div style={{marginTop:16}}>
+              {cart.map(c => (
+                <div key={c.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #333'}}>
+                  <div>
+                    <div style={{fontSize: 13, color: COLORS.white}}>{c.img} {c.name}</div>
+                    <div style={{fontSize: 11, color: COLORS.gray}}>${(c.pricePerSqft || c.pricePerItem).toFixed(2)} ea</div>
+                  </div>
+                  <input type="number" value={c.qty} onChange={e=>updateQty(c.id, e.target.value)} style={{...sty.input, width: 60, padding: 4, textAlign:'right'}} />
+                </div>
+              ))}
+              
+              <div style={{marginTop: 24, padding: 12, background: '#111', borderRadius: 4}}>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize: 12, color: COLORS.gray}}>
+                  <span>Material Cost</span>
+                  <span>${totalCost.toLocaleString()}</span>
+                </div>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize: 14, color: COLORS.amber, fontWeight: 700, marginTop: 8}}>
+                  <span>Worden Standard (35%)</span>
+                  <span>${margin35.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+                </div>
+              </div>
+
+              <button onClick={generateProposal} style={{...sty.btn, marginTop: 16, width: '100%', background: '#a855f7', color: '#fff', border: 'none'}} disabled={loading}>
+                {loading ? 'GENERATING...' : 'GENERATE ARCHITECTURAL PROPOSAL'}
+              </button>
+            </div>
+          )}
+        </div>
+        {proposal && (
+           <div style={{...sty.card, marginTop: 16}}>
+             <div style={sty.label}>JARVIS CONTRACT OUTPUT</div>
+             <pre style={{...sty.pre, maxHeight: 300, overflow:'auto', whiteSpace:'pre-wrap'}}>{proposal}</pre>
+           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const STATIONS=[
   {id:'jarvis',label:'JARVIS',icon:'🤖'},
+  {id:'design',label:'DESIGN BUILD',icon:'🎨'},
   {id:'bid',label:'BID COMMAND',icon:'📋'},
   {id:'pricing',label:'PRICING',icon:'💰'},
   {id:'fusion',label:'FUSION ENGINE',icon:'📊'},
@@ -713,6 +841,7 @@ export default function WordenCommandSystem(){
     </div>
     <div style={sty.panel}>
       {tab==='jarvis'&&<JarvisStation/>}
+      {tab==='design'&&<DesignStation/>}
       {tab==='bid'&&<BidStation/>}
       {tab==='pricing'&&<PricingStation/>}
       {tab==='fusion'&&<FusionStation/>}
