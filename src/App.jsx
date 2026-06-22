@@ -884,6 +884,8 @@ function HunterStation() {
   const [results, setResults] = useState([]);
   const { trucks, addBid } = useOS();
 
+  const [globalEyeLoading, setGlobalEyeLoading] = useState(false);
+
   const initiateHunt = async () => {
     setLoading(true);
     try {
@@ -903,6 +905,27 @@ function HunterStation() {
     setLoading(false);
   };
 
+  const initiateGlobalEye = async () => {
+    setGlobalEyeLoading(true);
+    try {
+      const addressesToScan = [`100 Main St, ${zipCode}`, `200 Commercial Rd, ${zipCode}`];
+      const resp = await fetch('/api/globaleye', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addresses: addressesToScan })
+      });
+      const data = await resp.json();
+      const newResults = (data.reports || []).map(r => ({
+        name: r.address,
+        pciEstimate: r.status === 'critical' ? 'SEVERE DECAY' : 'STABLE',
+        radarAlert: '🛰️ GLOBAL EYE SATELLITE SCAN',
+        contractDraft: r.diagnosis
+      }));
+      setResults(prev => [...newResults, ...prev]);
+    } catch(err) { console.error(err); }
+    setGlobalEyeLoading(false);
+  };
+
   return (
     <div style={{...sty.card}}>
       <div style={sty.label}>🎯 THE HUNTER PROTOCOL</div>
@@ -915,6 +938,9 @@ function HunterStation() {
         </select>
         <button style={{...sty.btn, background: '#ef4444', color: '#fff', border: 'none'}} onClick={initiateHunt} disabled={loading}>
           {loading ? 'HUNTING...' : 'INITIATE RADAR SCAN'}
+        </button>
+        <button style={{...sty.btn, background: '#10b981', color: '#fff', border: 'none'}} onClick={initiateGlobalEye} disabled={globalEyeLoading}>
+          {globalEyeLoading ? 'SATELLITE UPLINK...' : 'GLOBAL EYE SCAN'}
         </button>
       </div>
       
@@ -935,6 +961,8 @@ function HunterStation() {
 
 const STATIONS=[
   {id:'jarvis',label:'JARVIS',icon:'🤖'},
+  {id:'vision',label:'VISION AI',icon:'👁️'},
+  {id:'hunter',label:'HUNTER PROTOCOL',icon:'🎯'},
   {id:'design',label:'DESIGN BUILD',icon:'🎨'},
   {id:'bid',label:'BID COMMAND',icon:'📋'},
   {id:'pricing',label:'PRICING',icon:'💰'},
