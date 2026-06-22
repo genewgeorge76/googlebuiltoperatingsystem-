@@ -810,6 +810,129 @@ function DesignStation() {
   );
 }
 
+// ── VISION STATION (Phase 6) ──────────────────────────────────────────────
+function VisionStation() {
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) processFile(file);
+  };
+  const handleChange = (e) => {
+    const file = e.target.files[0];
+    if (file) processFile(file);
+  };
+
+  const processFile = (file) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      setImage(e.target.result);
+      setLoading(true);
+      try {
+        const resp = await fetch('/api/vision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: e.target.result, mediaType: file.type })
+        });
+        const data = await resp.json();
+        setResult(data);
+      } catch (err) { console.error(err); }
+      setLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{...sty.card}}>
+      <div style={sty.label}>J.A.R.V.I.S. VISION OPTICS</div>
+      <div style={{ display: 'flex', gap: 24, marginTop: 16 }}>
+        <div 
+          onDrop={handleDrop} 
+          onDragOver={e => e.preventDefault()}
+          style={{ flex: 1, height: 300, border: '2px dashed #f59e0b', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', background: '#111', cursor: 'pointer', overflow: 'hidden' }}
+          onClick={() => document.getElementById('vision-upload').click()}
+        >
+          {image ? <img src={image} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (
+            <div style={{color: COLORS.gray, textAlign: 'center'}}>
+              <div style={{fontSize: 32}}>🚁</div>
+              <div style={{marginTop: 8}}>Drag & Drop Drone or Satellite Photo Here</div>
+            </div>
+          )}
+          <input id="vision-upload" type="file" accept="image/*" onChange={handleChange} style={{ display: 'none' }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          {loading ? <div style={{color: COLORS.amber}}>Analyzing Structural Integrity...</div> : result ? (
+            <div>
+              <div style={{color: COLORS.green, fontSize: 14, fontWeight: 700}}>■ STRUCTURAL DIAGNOSIS</div>
+              <p style={{fontSize: 13, color: COLORS.white, marginTop: 8, whiteSpace: 'pre-wrap'}}>{result.diagnosis}</p>
+            </div>
+          ) : <div style={{color: COLORS.gray, fontSize: 13}}>Awaiting visual input...</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── HUNTER PROTOCOL STATION (Phase 6) ─────────────────────────────────────
+function HunterStation() {
+  const [zipCode, setZipCode] = useState('23831');
+  const [targetType, setTargetType] = useState('Commercial Strip Mall');
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState([]);
+  const { trucks, addBid } = useOS();
+
+  const initiateHunt = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch('/api/hunter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zipCode, targetType, activeTrucks: trucks })
+      });
+      const data = await resp.json();
+      setResults(data.targets || []);
+      if (data.targets) {
+        data.targets.forEach(t => {
+          addBid({ id: Date.now() + Math.random(), name: t.name, address: t.address, total: 15000, status: 'draft', notes: t.contractDraft });
+        });
+      }
+    } catch(err) { console.error(err); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{...sty.card}}>
+      <div style={sty.label}>🎯 THE HUNTER PROTOCOL</div>
+      <div style={{ display: 'flex', gap: 12, marginTop: 16, marginBottom: 24 }}>
+        <input style={sty.input} value={zipCode} onChange={e=>setZipCode(e.target.value)} placeholder="Target Zip Code (e.g. 23831)" />
+        <select style={sty.input} value={targetType} onChange={e=>setTargetType(e.target.value)}>
+          <option>Commercial Strip Mall</option>
+          <option>Industrial Warehouse</option>
+          <option>HOA Community</option>
+        </select>
+        <button style={{...sty.btn, background: '#ef4444', color: '#fff', border: 'none'}} onClick={initiateHunt} disabled={loading}>
+          {loading ? 'HUNTING...' : 'INITIATE RADAR SCAN'}
+        </button>
+      </div>
+      
+      {results.map((r, i) => (
+        <div key={i} style={{ padding: 12, border: '1px solid #333', marginBottom: 12, borderRadius: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.white }}>{r.name}</div>
+            <div style={{ fontSize: 12, color: COLORS.gray }}>PCI Estimate: {r.pciEstimate}</div>
+          </div>
+          {r.radarAlert && <div style={{ fontSize: 11, color: COLORS.amber, marginTop: 4 }}>{r.radarAlert}</div>}
+          <div style={{ fontSize: 12, color: COLORS.green, marginTop: 8 }}>✅ Proposal Drafted to Bid Command</div>
+          <pre style={{...sty.pre, marginTop: 8, maxHeight: 100, overflow: 'auto'}}>{r.contractDraft}</pre>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const STATIONS=[
   {id:'jarvis',label:'JARVIS',icon:'🤖'},
   {id:'design',label:'DESIGN BUILD',icon:'🎨'},
@@ -841,6 +964,8 @@ export default function WordenCommandSystem(){
     </div>
     <div style={sty.panel}>
       {tab==='jarvis'&&<JarvisStation/>}
+      {tab==='vision'&&<VisionStation/>}
+      {tab==='hunter'&&<HunterStation/>}
       {tab==='design'&&<DesignStation/>}
       {tab==='bid'&&<BidStation/>}
       {tab==='pricing'&&<PricingStation/>}

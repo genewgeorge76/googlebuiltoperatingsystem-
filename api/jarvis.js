@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       {
         name: "navigate_system",
         description: "Navigate to a different station in the operating system.",
-        input_schema: { type: "object", properties: { station: { type: "string", enum: ["jarvis", "design", "bid", "pricing", "legal", "fusion", "dispatch", "realestate"] } }, required: ["station"] }
+        input_schema: { type: "object", properties: { station: { type: "string", enum: ["jarvis", "vision", "hunter", "design", "bid", "pricing", "legal", "fusion", "dispatch", "realestate"] } }, required: ["station"] }
       },
       {
         name: "search_web",
