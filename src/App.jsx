@@ -4,22 +4,9 @@ import { weatherEngine } from "./lib/weatherEngine.js";
 import { pciDecayEngine } from "./lib/pciDecay.js";
 import { MapContainer, TileLayer, Polygon, useMapEvents } from "react-leaflet";
 import * as turf from "@turf/turf";
+import { OSProvider, useOS } from "./context/OSContext";
+import JarvisOrb from "./components/JarvisOrb";
 import "leaflet/dist/leaflet.css";
-
-function useStickyState(defaultValue, key) {
-  const [value, setValue] = useState(() => {
-    try {
-      const stickyValue = window.localStorage.getItem(key);
-      return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
-    } catch(err) {
-      return defaultValue;
-    }
-  });
-  useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
-  return [value, setValue];
-}
 
 function AreaMapper({ onCalculate }) {
   const [points, setPoints] = useState([]);
@@ -260,7 +247,7 @@ function JarvisStation(){
 function BidStation(){
   const[f,setF]=useState({name:'',address:'',sqft:'',depth:'2',service:'paving',prop:'commercial',state:'VA',industrial:false});
   const[result,setResult]=useState(null);
-  const[bids,setBids]=useStickyState([], 'worden-bids');
+  const { bids, addBid } = useOS();
   const[showMap, setShowMap]=useState(false);
   const upd=(k,v)=>setF(p=>({...p,[k]:v}));
 
@@ -277,7 +264,7 @@ function BidStation(){
 
   const saveBid=()=>{
     if(!result)return;
-    setBids(p=>[{id:Date.now(),name:f.name||'Unnamed',address:f.address,service:SVC_LABELS[f.service],sqft:f.sqft,low:result.margin35low,high:result.margin35high,tons:result.tonnage.tons,date:new Date().toLocaleDateString(),status:'draft'},...p]);
+    addBid({id:Date.now(),name:f.name||'Unnamed',address:f.address,service:SVC_LABELS[f.service],sqft:f.sqft,low:result.margin35low,high:result.margin35high,tons:result.tonnage.tons,date:new Date().toLocaleDateString(),status:'draft'});
   };
 
   return(<div>
@@ -543,7 +530,6 @@ function ProposalStation(){
   const upd=(k,v)=>setF(p=>({...p,[k]:v}));
   const generate=async()=>{
     setLoading(true);
-    const price=estimatePrice(f.service,f.prop,parseFloat(f.sqft)||0,f.state);
     
     try {
       const resp = await fetch('/api/bidder', {
@@ -559,6 +545,10 @@ function ProposalStation(){
         })
       });
       const data = await resp.json();
+      setResult(data);
+      if(data&&data.metrics){
+        addBid({...data.metrics,client:f.name,address:f.address,sqft:f.sqft});
+      }
       if (data.error) throw new Error(data.error);
       
       const metricsText = `\n\n--- ENGINEERING METRICS ---\nAsphalt Required: ${data.metrics.asphaltTons.toFixed(2)} Tons\nStone Base Required: ${data.metrics.stoneTons.toFixed(2)} Tons\nEstimated Material Cost: $${data.metrics.totalProjectedCost.toFixed(2)}`;
@@ -707,7 +697,7 @@ const STATIONS=[
 
 export default function WordenCommandSystem(){
   const[tab,setTab]=useState('jarvis');
-  return(<div style={sty.app}>
+  return(<OSProvider><div style={sty.app}>
     <div style={sty.header}>
       <div>
         <div style={sty.logo}>WORDEN COMMAND SYSTEM</div>
@@ -732,5 +722,6 @@ export default function WordenCommandSystem(){
       {tab==='dispatch'&&<DispatchStation/>}
       {tab==='realestate'&&<RealEstateStation/>}
     </div>
-  </div>);
+    <JarvisOrb setTab={setTab} />
+  </div></OSProvider>);
 }
